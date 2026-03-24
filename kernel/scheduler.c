@@ -25,7 +25,7 @@ static uint32_t current_task  = 0;
 static uint32_t task_count    = 0;
 
 /* ============================================================
- *  scheduler_init - Initializeaza scheduler-ul
+ * scheduler_init - Initializeaza scheduler-ul
  * ============================================================ */
 void scheduler_init(void)
 {
@@ -34,6 +34,82 @@ void scheduler_init(void)
 
     for (int i = 0; i < MAX_TASKS; i++) {
         tasks[i].active = FALSE;
+    }
+}
+
+/* ============================================================
+ * scheduler_create_task - Adauga un task nou
+ * entry: functia care va rula ca task
+ * name:  nume pentru debugging
+ * ============================================================ */
+void scheduler_create_task(void (*entry)(void), const char* name)
+{
+    if (task_count >= MAX_TASKS) return;
+
+    task_t* t = &tasks[task_count];
+
+    /* Copiaza numele */
+    int i;
+    for (i = 0; name[i] && i < 31; i++) t->name[i] = name[i];
+    t->name[i] = '\0';
+
+    /* Initializeaza stack-ul task-ului
+     * Stack-ul creste in jos, asa ca ESP incepe la capatul de sus */
+    t->esp = (uint32_t)(t->stack + STACK_SIZE - 4);
+    t->eip = (uint32_t)entry;
+
+    /* Pune adresa functiei pe stack (pentru primul context switch) */
+    *((uint32_t*)t->esp) = (uint32_t)entry;
+
+    t->active = TRUE;
+    task_count++;
+}
+
+/* ============================================================
+ * scheduler_yield - Apelat la fiecare tick de timer
+ * Salveaza contextul curent si trece la urmatorul task
+ * ============================================================ */
+void scheduler_yield(void)
+{
+    if (task_count <= 1) return; /* Nimic de schimbat */
+
+    /* Gaseste urmatorul task activ (Round-Robin) */
+    uint32_t next = (current_task + 1) % task_count;
+    uint32_t searched = 0;
+
+    while (!tasks[next].active && searched < task_count) {
+        next = (next + 1) % task_count;
+        searched++;
+    }
+
+    if (next == current_task) return; /* Doar un task activ */
+
+    uint32_t prev = current_task;
+    current_task  = next;
+
+    /* Context switch in assembly inline REPARAT
+     * Folosim sufixul 'l' (long) pentru instructiuni pe 32 de biti
+     * si constrangeri "r" pentru a evita erorile de mărime operand */
+    __asm__ volatile (
+        "movl %%esp, %0\n\t"   /* Salveaza ESP-ul vechi in memorie */
+        "movl %2, %%esp\n\t"   /* Incarca noul ESP din registru */
+        "pushl %3\n\t"         /* Pune noul EIP pe noul stack */
+        "ret\n\t"              /* "Sari" la functia task-ului */
+        : "=m" (tasks[prev].esp)
+        : "m" (tasks[prev].eip),
+          "r" (tasks[next].esp),
+          "r" (tasks[next].eip)
+        : "memory"
+    );
+}
+
+/* ============================================================
+ * scheduler_get_current - Returneaza ID-ul task-ului curent
+ * ============================================================ */
+uint32_t scheduler_get_current(void)
+{
+    return current_task;
+}
     }
 }
 
