@@ -45,9 +45,11 @@ $(BUILD_DIR)/loraos.kernel: $(OBJECTS) linker.ld
 	$(LD) $(LDFLAGS) -o $@ $(BUILD_DIR)/boot.o $(filter-out $(BUILD_DIR)/boot.o, $(OBJECTS))
 
 iso: $(BUILD_DIR)/loraos.kernel grub.cfg
+	@echo "[ISO] Pregatesc structura ISO..."
 	@mkdir -p $(ISO_DIR)/boot/grub
 	@cp $(BUILD_DIR)/loraos.kernel $(ISO_DIR)/boot/loraos.bin
 	@cp grub.cfg $(ISO_DIR)/boot/grub/grub.cfg
+	@echo "[ISO] Generez imaginea finala loraos.iso..."
 	$(GRUB) -o loraos.iso $(ISO_DIR)
 
 $(BUILD_DIR)/boot.o: $(KERNEL_DIR)/boot/boot.asm
