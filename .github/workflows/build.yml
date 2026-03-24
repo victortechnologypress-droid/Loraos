@@ -1,27 +1,29 @@
 name: Build LoraOS ISO
 
-on:
-  push:
-    branches: [ main, master ]
-  workflow_dispatch:
+on: [push]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4 # Sau v5 dacă a ieșit deja
+      
+      - name: Install Compilers
+        run: |
+          sudo apt update
+          sudo apt install -y gcc-i686-linux-gnu nasm xorriso grub-pc-bin mtools
 
-    - name: Instaleaza toolchain
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-i686-linux-gnu binutils-i686-linux-gnu nasm make grub-pc-bin grub-common xorriso mtools
+      - name: Compile Kernel
+        run: make
 
-    - name: Compileaza si genereaza ISO
-      run: make iso
+      - name: Create ISO
+        run: make iso
 
-    - name: Upload ISO
-      uses: actions/upload-artifact@v4
-      with:
-        name: loraos-iso
-        path: loraos.iso
-        retention-days: 30
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LoraOS-ISO
+          path: loraos.iso
