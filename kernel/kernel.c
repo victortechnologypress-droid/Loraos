@@ -6,7 +6,6 @@
 #include "../drivers/ps2mouse.h"
 #include "../ui/desktop.h"
 
-/* Structura Multiboot necesara pentru info RAM */
 typedef struct {
     uint32_t flags;
     uint32_t mem_lower;
@@ -15,7 +14,13 @@ typedef struct {
     uint32_t cmdline;
 } multiboot_info_t;
 
-/* Functie pentru desenat Logo pe Acer Aspire One */
+/* Dezactiveaza cursorul hardware care palpaie */
+void k_disable_cursor() {
+    outb(0x3D4, 0x0A);
+    outb(0x3D5, 0x20);
+}
+
+/* Functie de scris text in mod text (0xB8000) */
 void k_early_print(const char* str, int row) {
     volatile char* vga = (volatile char*)0xB8000;
     int offset = row * 80 * 2;
@@ -26,52 +31,43 @@ void k_early_print(const char* str, int row) {
 }
 
 void kernel_main(uint32_t magic, multiboot_info_t* mbi) {
-    /* 1. Verificam daca am bootat corect */
+    /* Oprim cursorul imediat */
+    k_disable_cursor();
+
     if (magic != 0x2BADB002) {
-        volatile char* vga = (volatile char*)0xB8000;
-        const char* msg = "BOOT ERROR: Non-Multiboot!";
-        for (int i = 0; msg[i]; i++) {
-            vga[i*2] = msg[i];
-            vga[i*2+1] = 0x4F;
-        }
-        for(;;) { __asm__ volatile("hlt"); }
+        k_early_print("EROARE: Bootloader incompatibil!", 0);
+        for(;;) __asm__ volatile("hlt");
     }
 
-    /* 2. Afisare Logo ASCII LoraOS */
-    k_early_print(">>================================================================<<", 2);
-    k_early_print("||  `..                                     `....       `.. ..    ||", 4);
-    k_early_print("||  `..                                   `..    `..  `..    `..  ||", 5);
-    k_early_print("||  `..         `..    `. `...   `..    `..        `.. `..        ||", 6);
-    k_early_print("||  `..       `..  `..  `..    `..  `.. `..        `..   `..      ||", 7);
-    k_early_print("||  `..      `..    `.. `..   `..   `.. `..        `..      `..   ||", 8);
-    k_early_print("||  `..       `..  `..  `..   `..   `..   `..     `.. `..    `..  ||", 9);
-    k_early_print("||  `........   `..    `...     `.. `...    `....       `.. ..    ||", 10);
-    k_early_print(">>================================================================<<", 12);
-    k_early_print("                Made by Rosca Victor", 14);
+    /* Afisare Logo */
+    k_early_print(">>================================================<<", 2);
+    k_early_print("||        LORA OS - MADE BY VICTOR ROSCA          ||", 3);
+    k_early_print(">>================================================<<", 4);
 
-    /* 3. Animatie Loading */
-    for (int i = 0; i < 2; i++) {
-        k_early_print("Loading .      ", 16);
-        for (volatile int d = 0; d < 10000000; d++);
-        k_early_print("Loading . .    ", 16);
-        for (volatile int d = 0; d < 10000000; d++);
-        k_early_print("Loading . . .  ", 16);
-        for (volatile int d = 0; d < 10000000; d++);
-    }
-
-    /* 4. Initializare Hardware */
+    /* --- DEBUG PAS CU PAS --- */
+    k_early_print("Pas 1: Initializare RAM...", 6);
     uint32_t total_ram_kb = mbi->mem_upper + 1024;
     pmm_init(total_ram_kb);
-    
-    vbe_init();
+    k_early_print("OK!", 7);
+
+    k_early_print("Pas 2: Initializare Video (VBE)...", 9);
+    vbe_init(); 
+    /* Daca sistemul ingheata aici, nu vei vedea mesajul de mai jos */
+    k_early_print("OK!", 10);
+
+    k_early_print("Pas 3: Initializare Drivere Input...", 12);
     keyboard_init();
     ps2mouse_init();
-    scheduler_init();
+    k_early_print("OK!", 13);
 
-    /* 5. Pornire Desktop */
+    k_early_print("Pas 4: Pornire Scheduler si Desktop...", 15);
+    scheduler_init();
     desktop_init();
+    
+    k_early_print("Sistemul porneste interfata grafica...", 17);
+    for (volatile int d = 0; d < 50000000; d++); /* Scurta pauza sa citesti */
+    
     desktop_run();
 
-    /* Bucla infinita de siguranta */
-    for(;;) { __asm__ volatile("hlt"); }
+    for(;;) __asm__ volatile("hlt");
 }
